@@ -47,8 +47,38 @@ int main() {
         addEdge(graph, start, end); 
     }
     fclose(texasRoads);
-    bfs(com, rank, world_size, graph, nodes);
+    if (rank == 0) {
+        char* running = malloc(world_size*sizeof(char));    
+        int i;
+        for (i=0; i < world_size; i++) {
+            running[i] = 1;
+        }
+        char run = 1;
+        char status;
+        while (run) {
+            char sum = 0;
+            for (i = 0; i<world_size; i++) {
+                if (i != 0 && running[i] == 1) {
+                    MPI_Recv(&status, 1, MPI_CHAR, i, 0, com, MPI_STATUS_IGNORE);
+                    running[i] = status;
+                }
+                sum += running[i];
+            }
+            if (sum == 1) {
+                run = 0;
+            } else {
+                for (i = 1; i<world_size; i++) {
+                    if (running[i] == 1) {
+                        MPI_Send(running, world_size, MPI_CHAR, i, 0, com);
+                    }
+                }
+            }
+        }
+    } else {
+        bfs(com, rank, world_size, graph, nodes);
+    }
     printf("Process %d done\n", rank);
+    MPI_Barrier(com);
     MPI_Finalize();
     //printGraph(graph); 
     return 0;
@@ -58,11 +88,16 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
     struct queue* frontier = createQueue();
     char* visited = calloc(graph_size, sizeof(char));
     char* changedBuffer = calloc(graph_size, sizeof(char));
+    char* running = malloc(world_size*sizeof(char));
     int start = (graph_size/world_size) * rank;
     visited[start] = 1;
+    char run = 1;
     enqueue(frontier, start);
+    
 
     while(!isEmpty(frontier)) {
+        MPI_Send(&run, 1, MPI_CHAR, 0, 0, com);
+        MPI_Recv(running, world_size, MPI_CHAR, 0, 0, com, MPI_STATUS_IGNORE);
         char* changed = calloc(graph_size, sizeof(char));
         // Print
         int vert = dequeue(frontier);
@@ -79,15 +114,15 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
         }
         int i;
         int j;
-        for (i = 0; i < world_size; i++) {
-            if (i != rank) {
+        for (i = 1; i < world_size; i++) {
+            if (running[i] && i != rank) {
                 MPI_Send(changed, graph_size, MPI_CHAR, i, 0, com);
-            } else {
-                for (j = 0; j < world_size; j++) {
-                    if (j != rank) {
-                        MPI_Recv(changedBuffer, graph_size, MPI_INT, j, 0, com, MPI_STATUS_IGNORE);
+            } else if (running[i]) {
+                for (j = 1; j < world_size; j++) {
+                    if (running[j] && j != rank) {
+                        MPI_Recv(changedBuffer, graph_size, MPI_CHAR, j, 0, com, MPI_STATUS_IGNORE);
                         int k;
-                        for (k = 0; k < graph_size; k++) {
+                        for (k = 1; k < graph_size; k++) {
                             if (changedBuffer[k] == 1) {
                                 visited[k] = 1;
                             }
@@ -97,27 +132,9 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
             }
         }
         free(changed);
-        /*
-        MPI_Request req;
-        for (i = 0; i < world_size; i++) {
-            if (i != rank) {
-                MPI_Isend(visited, graph_size, MPI_INT, i, 0, com, &req);
-            }
-        }
-        for (i = 0; i < world_size; i++) {
-            if (i != rank) {
-                MPI_Irecv(recvBuffer, graph_size, MPI_INT, i, 0, com, &req);
-                MPI_Wait(&req, 1);
-                int subCount = (graph_size/world_size);
-                int j;
-                for (j = subCount*i; j < subCount*(i+1); j++) {
-                    visited[j] = recvBuffer[j];
-                }
-            }
-        }
-        */
     }
-
+    run = 0;
+    MPI_Send(&run, 1, MPI_CHAR, 0, 0, com);
 }
 
 
