@@ -3,7 +3,7 @@
 
 
 struct queue {
-    int items[40000];
+    int items[80000];
     int head;
     int tail;
 };
@@ -31,6 +31,20 @@ void enqueue(struct queue* q, int value) {
     }
 }
 
+int sizeOfQ(struct queue* q) {
+    return q->tail+1;
+}
+
+int contains(struct queue* q, int value) {
+    int i;
+    for (i = 0; i < 40000; i++) {
+        if (q->items[i] == value) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int dequeue(struct queue* q) {
     int item;
     if (isEmpty(q)) {
@@ -40,7 +54,7 @@ int dequeue(struct queue* q) {
         item = q->items[q->head];
         q->head++;
         if (q->head > q->tail) {
-            printf("Resetting\n");
+            //printf("Resetting\n");
             q->head = q->tail = -1;
         }
     }

@@ -15,20 +15,17 @@ int getStartNode(char* line);
 int getEndNode(char* line);
 void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_size);
 
-/* README COMMENTS!!!
- * This comment block is meant for discussing the speed ups over the serial
- * implementation.
- * The serial BFS works by searching the breadth of options instead of drilling to the leafs of a tree like in depth first.
- * My parallel implementation does this by starting a BFS at the same time across different starting points of the graph.
- * Ideally, these starting points should be optimized.
- * I like to think of it like a voronoi diagram. 
- * I want to pick starting points so that the resulting area searched by each resembles a voronoi diagram.
- * I broadcast the visited nodes across all processes.
- * This is done so that work is not repeated across processes. 
- * In conclusion, the parallel implementation offers speed ups because of the N processes searching at the same time.
- * This divides the work of searching the graph N times.
- * Work is not repeated because the list of visited nodes is broadcasted to all other nodes.
- *
+/**
+ * README COMMENTS!!!!
+ * This is a comments block that is a identical copy of whats found in the README.
+ * This is the implementation for the Hybrid BFS algorithm.
+ * It introduces a bottom up search into the classic BFS algorithm.
+ * This switch will happen when the following heuristic is encountered.
+ * For each process, if the edges to check on the frontier is ever larger than the edges to check on the graph then switch to bottom up search.
+ * This heuristic optimizes BFS only when the frontier is esspicially large.
+ * It limit the ammount of false children found on the graph.
+ * It will also optimize the most inefficent portion of BFS (that being when the frontier is large).
+ * I have the switch highlighted in the code below.
  */
 int main() {
     MPI_Init(NULL, NULL);
@@ -63,7 +60,7 @@ int main() {
     }
     fclose(texasRoads);
     if (rank == 0) {
-        printf("Total nodes in graph: %d\n", nodes);
+        printf("Total Nodes of graph: %d\n", nodes);
         char* running = malloc(world_size*sizeof(char));    
         int i;
         for (i=0; i < world_size; i++) {
@@ -100,6 +97,37 @@ int main() {
     return 0;
 }
 
+int checkDegrees(struct queue* frontier, struct Graph* graph) {
+    int size = sizeOfQ(frontier);
+    int count = 0;
+    int i;
+    for (i = 0; i < size; i++) {
+        int vert = dequeue(frontier);
+        struct AdjListNode* temp = getHeadNode(graph, vert);
+        while (temp) {
+            count++;
+            temp=temp->next;
+        }
+        enqueue(frontier, vert);
+    }
+    return count;
+}
+
+int checkUnexplored(struct Graph* graph, char* visited, int graph_size) {
+    int count = 0;
+    int i;
+    for (i=0; i < graph_size; i++) {
+        if (!visited[i]) {
+            struct AdjListNode* temp = getHeadNode(graph, i);
+            while (temp) {
+                count++;
+                temp=temp->next;
+            }
+        }
+    }
+    return count;
+}
+
 void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_size) {
     struct queue* frontier = createQueue();
     char* visited = calloc(graph_size, sizeof(char));
@@ -111,23 +139,46 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
     char run = 1;
     enqueue(frontier, start);
     
-    // BFS loop
+
     while(!isEmpty(frontier)) {
         MPI_Send(&run, 1, MPI_CHAR, 0, 0, com);
         MPI_Recv(running, world_size, MPI_CHAR, 0, 0, com, MPI_STATUS_IGNORE);
         char* changed = calloc(graph_size, sizeof(char));
-        int vert = dequeue(frontier);
-        //printf("Cur: %d\n", vert);
-        struct AdjListNode* temp = getHeadNode(graph, vert);
-        while (temp) {
-            int adjVert = temp->dest;
-            if (visited[adjVert] == 0) {
-                changed[adjVert] = 1;
-                count++;
-                visited[adjVert] = 1;
-                enqueue(frontier, adjVert);
+        // Below is the heuristic for switching to bottom up...
+        if (checkUnexplored(graph, visited, graph_size) < checkDegrees(frontier, graph)) {
+           // Bottom up search here... 
+           int i;
+           for (i=0; i < graph_size; i++) {
+                if (visited[i] == 0) {
+                    struct AdjListNode* temp = getHeadNode(graph, i);
+                    while (temp) {
+                        if (contains(frontier, i)) {
+                            changed[i] = 1;
+                            visited[i] = 1;
+                            count++;
+                            enqueue(frontier, i);
+                            break;
+                        }
+                        temp=temp->next;
+                    }
+                    
+                }
+           }
+        } else {
+            // Classic BFS search here.
+            int vert = dequeue(frontier);
+            //printf("Cur: %d\n", vert);
+            struct AdjListNode* temp = getHeadNode(graph, vert);
+            while (temp) {
+                int adjVert = temp->dest;
+                if (visited[adjVert] == 0) {
+                    changed[adjVert] = 1;
+                    visited[adjVert] = 1;
+                    count++;
+                    enqueue(frontier, adjVert);
+                }
+                temp = temp->next;
             }
-            temp = temp->next;
         }
         int i;
         int j;
