@@ -146,17 +146,28 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
         char* changed = calloc(graph_size, sizeof(char));
         // Below is the heuristic for switching to bottom up...
         if (checkUnexplored(graph, visited, graph_size) < checkDegrees(frontier, graph)) {
+           printf("Bottom up approach on process %d!\n", rank);
+           char* bitmap = calloc(graph_size, sizeof(char));
+           int vert = dequeue(frontier);
+           while(vert != -1) {
+                bitmap[vert] = 1;
+                vert = dequeue(frontier);
+           }
+           free(frontier);
+           struct queue *nextFrontier = createQueue();
            // Bottom up search here... 
            int i;
            for (i=0; i < graph_size; i++) {
                 if (visited[i] == 0) {
                     struct AdjListNode* temp = getHeadNode(graph, i);
                     while (temp) {
-                        if (contains(frontier, i)) {
+                        int neighbor = getNodeDest(temp);
+                        if (bitmap[neighbor] == 1) {
+                            //printf("Adding dest to new frontier!\n");
                             changed[i] = 1;
                             visited[i] = 1;
                             count++;
-                            enqueue(frontier, i);
+                            enqueue(nextFrontier, i);
                             break;
                         }
                         temp=temp->next;
@@ -164,7 +175,10 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
                     
                 }
            }
+           free(bitmap);
+           frontier = nextFrontier;
         } else {
+            printf("Top Down Approach on process %d\n", rank);
             // Classic BFS search here.
             int vert = dequeue(frontier);
             //printf("Cur: %d\n", vert);
@@ -201,7 +215,6 @@ void bfs(MPI_Comm com, int rank, int world_size, struct Graph* graph, int graph_
         }
         free(changed);
     }
-    printf("Nodes searched by process %d: %d\n", rank, count);
     run = 0;
     MPI_Send(&run, 1, MPI_CHAR, 0, 0, com);
 }

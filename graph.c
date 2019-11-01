@@ -33,6 +33,10 @@ struct AdjListNode* getHeadNode(struct Graph* graph, int vert) {
     return graph->array[vert].head;
 }
 
+int getNodeDest(struct AdjListNode* node) {
+    return node-> dest;
+}
+
 // A utility function that creates a graph of V vertices 
 struct Graph* createGraph(int V) { 
     struct Graph* graph = 

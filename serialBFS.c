@@ -50,22 +50,25 @@ void bfs(struct Graph* graph, int graph_size, int start) {
     int *visited = calloc(graph_size, sizeof(int));
     visited[start] = 1;
     enqueue(frontier, start);
+    int count = 0;
 
     while(!isEmpty(frontier)) {
         // Print
         int vert = dequeue(frontier);
-        printf("Cur: %d\n", vert);
+        //printf("Cur: %d\n", vert);
         struct AdjListNode* temp = getHeadNode(graph, vert);
         while (temp) {
             int adjVert = temp->dest;
             if (visited[adjVert] == 0) {
+                count++;
                 visited[adjVert] = 1;
                 enqueue(frontier, adjVert);
             }
             temp = temp->next;
         }
     }
-
+    printf("Visited %d nodes!\n");
+    printf("BFS complete!\n");
 }
 
 

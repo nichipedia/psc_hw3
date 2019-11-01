@@ -48,7 +48,7 @@ int contains(struct queue* q, int value) {
 int dequeue(struct queue* q) {
     int item;
     if (isEmpty(q)) {
-        printf("Queue is empty!");
+        printf("Queue is empty!\n");
         item = -1;
     } else {
         item = q->items[q->head];
